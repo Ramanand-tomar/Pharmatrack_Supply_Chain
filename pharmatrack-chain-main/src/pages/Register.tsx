@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, UserPlus } from "lucide-react";
+import { API_URL } from "@/lib/contract";
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -30,7 +31,7 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:5000/api/register", {
+      const response = await fetch(`${API_URL}/api/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...formData, walletAddress: account }),

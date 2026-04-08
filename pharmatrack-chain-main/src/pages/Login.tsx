@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2, LogIn } from "lucide-react";
+import { API_URL } from "@/lib/contract";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -25,7 +26,7 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:5000/api/login", {
+      const response = await fetch(`${API_URL}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),

@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { MedicineStageProgress } from "@/components/MedicineStageProgress";
-import { STAGES, type Medicine, type Participant } from "@/lib/contract";
+import { STAGES, type Medicine, type Participant, IPFS_GATEWAY, PLACEHOLDER_IMAGE } from "@/lib/contract";
 import { QRModal } from "@/components/QRModal";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
@@ -737,10 +737,10 @@ export default function OwnerDashboard() {
                       <div className="flex gap-4 items-center flex-1">
                         {req.imageHash && (
                            <img 
-                             src={`https://gateway.pinata.cloud/ipfs/${req.imageHash}`} 
+                             src={`${IPFS_GATEWAY}${req.imageHash}`} 
                              alt={req.name} 
                              className="h-20 w-20 object-cover rounded-md border bg-muted shadow-sm"
-                             onError={(e) => (e.currentTarget.src = "https://placehold.co/100x100?text=No+Image")}
+                             onError={(e) => (e.currentTarget.src = PLACEHOLDER_IMAGE)}
                            />
                         )}
                         <div className="flex-1">

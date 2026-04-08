@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MedicineStageProgress } from "@/components/MedicineStageProgress";
 import { Badge } from "@/components/ui/badge";
-import { STAGES, type Medicine, type Participant } from "@/lib/contract";
+import { STAGES, type Medicine, type Participant, IPFS_GATEWAY } from "@/lib/contract";
 import { Search, Pill, Users, Package, Factory, Truck, ShoppingCart, Loader2, QrCode, ShieldCheck, History, Activity, AlertCircle } from "lucide-react";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { ProductTimeline } from "@/components/ProductTimeline";
@@ -210,7 +210,7 @@ export default function LandingPage() {
               {searchResult.imageHash && (
                 <div className="w-full h-48 md:h-64 rounded-xl overflow-hidden border mb-4">
                   <img 
-                    src={`https://gateway.pinata.cloud/ipfs/${searchResult.imageHash}`} 
+                    src={`${IPFS_GATEWAY}${searchResult.imageHash}`} 
                     alt={searchResult.name} 
                     className="w-full h-full object-cover"
                   />

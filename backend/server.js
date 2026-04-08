@@ -18,7 +18,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: "*",
+        origin: process.env.ALLOWED_ORIGIN || "*",
         methods: ["GET", "POST"]
     }
 });
@@ -26,7 +26,11 @@ const io = new Server(server, {
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: process.env.ALLOWED_ORIGIN || "*",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
+}));
 app.use(express.json());
 app.use((req, res, next) => {
     console.log(`${req.method} ${req.url}`);

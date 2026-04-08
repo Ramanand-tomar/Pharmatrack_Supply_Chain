@@ -57,4 +57,6 @@ export interface Participant {
 export type UserRole = "owner" | "rms" | "manufacturer" | "distributor" | "retailer" | "public";
 
 export const CONTRACT_ABI = ABI;
-export const API_URL = "http://localhost:5000";
+export const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+export const IPFS_GATEWAY = import.meta.env.VITE_IPFS_GATEWAY || "https://gateway.pinata.cloud/ipfs/";
+export const PLACEHOLDER_IMAGE = import.meta.env.VITE_PLACEHOLDER_IMAGE || "https://placehold.co/100x100?text=No+Image";
