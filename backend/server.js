@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
+const http = require('http');
+const { Server } = require('socket.io');
 require('dotenv').config();
 
 const { uploadToIPFS } = require('./utils/ipfs');
@@ -10,8 +12,17 @@ const User = require('./models/User');
 const ProductRequest = require('./models/ProductRequest');
 const MedicineMetadata = require('./models/MedicineMetadata');
 const RoleRequest = require('./models/RoleRequest');
+const RecallAlert = require('./models/RecallAlert');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
+
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Middleware
@@ -20,6 +31,14 @@ app.use(express.json());
 app.use((req, res, next) => {
     console.log(`${req.method} ${req.url}`);
     next();
+});
+
+// Socket.io
+io.on('connection', (socket) => {
+    console.log('User connected:', socket.id);
+    socket.on('disconnect', () => {
+        console.log('User disconnected');
+    });
 });
 
 // DB Connection
@@ -51,6 +70,33 @@ app.post('/api/manufacturer/request-product', async (req, res) => {
         const request = new ProductRequest({ ...productData, manufacturerAddress: manufacturerAddress.toLowerCase() });
         await request.save();
         res.status(201).json(request);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// Batch Recall Endpoint
+app.post('/api/products/recall-batch', async (req, res) => {
+    try {
+        const { batchNumber, reason, manufacturerAddress } = req.body;
+        
+        // Save alert to DB
+        const alert = new RecallAlert({
+            batchNumber,
+            reason,
+            manufacturerAddress: manufacturerAddress.toLowerCase()
+        });
+        await alert.save();
+
+        // Broadcast to all connected clients
+        io.emit('recall_alert', {
+            batchNumber,
+            reason,
+            manufacturerAddress,
+            timestamp: new Date()
+        });
+
+        res.status(201).json({ success: true, alert });
     } catch (err) {
         res.status(400).json({ error: err.message });
     }
@@ -164,5 +210,5 @@ app.get('/api/metadata/:onChainId', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+server.listen(PORT, () => console.log(`Server started on port ${PORT}`));
 

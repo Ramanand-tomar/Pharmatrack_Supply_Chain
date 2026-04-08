@@ -17,6 +17,8 @@ import RegisterPage from "@/pages/Register";
 import NotFound from "@/pages/NotFound";
 import { RoleRedirect } from "@/components/RoleRedirect";
 
+import { SocketProvider } from "@/contexts/SocketContext";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -25,24 +27,26 @@ const App = () => (
       <Toaster />
       <Sonner />
       <Web3Provider>
-        <BrowserRouter>
-          <RoleRedirect />
-          <Routes>
-            <Route element={<AppLayout />}>
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/owner" element={<OwnerDashboard />} />
-              <Route path="/owner/*" element={<OwnerDashboard />} />
-              <Route path="/rms" element={<RMSDashboard />} />
-              <Route path="/manufacturer" element={<ManufacturerDashboard />} />
-              <Route path="/distributor" element={<DistributorDashboard />} />
-              <Route path="/retailer" element={<RetailerDashboard />} />
-              <Route path="/customer" element={<CustomerDashboard />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
+        <SocketProvider>
+          <BrowserRouter>
+            <RoleRedirect />
+            <Routes>
+              <Route element={<AppLayout />}>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/owner" element={<OwnerDashboard />} />
+                <Route path="/owner/*" element={<OwnerDashboard />} />
+                <Route path="/rms" element={<RMSDashboard />} />
+                <Route path="/manufacturer" element={<ManufacturerDashboard />} />
+                <Route path="/distributor" element={<DistributorDashboard />} />
+                <Route path="/retailer" element={<RetailerDashboard />} />
+                <Route path="/customer" element={<CustomerDashboard />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/register" element={<RegisterPage />} />
+              </Route>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </SocketProvider>
       </Web3Provider>
     </TooltipProvider>
   </QueryClientProvider>

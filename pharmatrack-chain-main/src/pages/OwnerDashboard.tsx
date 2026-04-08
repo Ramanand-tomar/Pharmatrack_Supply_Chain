@@ -17,9 +17,17 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
-import { Loader2, Plus, Pill, Users, Settings, ShieldAlert, Play, Pause, ClipboardList } from "lucide-react";
+import { 
+  Loader2, Plus, Pill, Users, Settings, ShieldAlert, Play, Pause, 
+  ClipboardList, Calendar as CalendarIcon, CheckCircle, AlertTriangle,
+  Activity, ChevronRight, MapPin, UserPlus, ImagePlus, X, Factory
+} from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate, useLocation } from "react-router-dom";
+import { cn } from "@/lib/utils";
 
 // Schemas
 const participantSchema = z.object({
@@ -53,6 +61,8 @@ export default function OwnerDashboard() {
   const [selectedQR, setSelectedQR] = useState<{ id: number; name: string } | null>(null);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [roleRequests, setRoleRequests] = useState<any[]>([]);
+  const [image, setImage] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -92,8 +102,9 @@ export default function OwnerDashboard() {
       toast.success("Participant added!");
       participantForm.reset();
       loadData();
-    } catch (e: any) {
-      toast.error(e.reason || e.message || "Transaction failed");
+    } catch (e: unknown) {
+      const error = e as any;
+      toast.error(error.reason || error.message || "Transaction failed");
     }
     setTxLoading(false);
   };
@@ -110,8 +121,9 @@ export default function OwnerDashboard() {
       await tx.wait();
       toast.success(`Participant ${currentActive ? "deactivated" : "activated"}`);
       loadData();
-    } catch (e: any) {
-      toast.error(e.reason || e.message || "Failed");
+    } catch (e: unknown) {
+      const error = e as any;
+      toast.error(error.reason || error.message || "Failed");
     }
     setTxLoading(false);
   };
@@ -123,16 +135,56 @@ export default function OwnerDashboard() {
     if (!contract) return;
     setTxLoading(true);
     try {
+      let imageHash = "";
+      if (image) {
+        setIsUploading(true);
+        const formData = new FormData();
+        formData.append("image", image);
+        const uploadRes = await fetch(`${API_URL}/api/upload`, {
+          method: "POST",
+          body: formData,
+        });
+        const uploadData = await uploadRes.json();
+        if (uploadData.hash) imageHash = uploadData.hash;
+        setIsUploading(false);
+      }
+
       const mfgDate = Math.floor(new Date(data.manufacturingDate).getTime() / 1000);
       const expDate = Math.floor(new Date(data.expiryDate).getTime() / 1000);
       const tx = await contract.addMedicine(data.name, data.description, data.batchNumber, mfgDate, expDate, data.quantity, data.price);
       toast.info("Transaction submitted...");
-      await tx.wait();
+      const receipt = await tx.wait();
+
+      // Extract medicine ID from event
+      let onChainId;
+      if (receipt.logs) {
+        for (const log of receipt.logs) {
+          try {
+            const parsedLog = contract.interface.parseLog(log);
+            if (parsedLog?.name === "MedicineAdded") {
+              onChainId = Number(parsedLog.args.id);
+              break;
+            }
+          } catch (e) {}
+        }
+      }
+
+      // If we have an image, we should ideally notify the backend to link it
+      if (imageHash && onChainId) {
+        await fetch(`${API_URL}/api/admin/link-medicine-image`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ onChainId, imageHash })
+        }).catch(console.error);
+      }
+
       toast.success("Medicine added!");
       medicineForm.reset();
+      setImage(null);
       loadData();
     } catch (e: any) {
       toast.error(e.reason || e.message || "Failed");
+      setIsUploading(false);
     }
     setTxLoading(false);
   };
@@ -211,9 +263,10 @@ export default function OwnerDashboard() {
 
       toast.success("Product approved and added to blockchain!");
       loadData();
-    } catch (e: any) { 
+    } catch (e: unknown) { 
       console.error(e);
-      toast.error(e.reason || e.message || "Failed"); 
+      const error = e as any;
+      toast.error(error.reason || error.message || "Failed"); 
     }
     setTxLoading(false);
   };
@@ -224,7 +277,10 @@ export default function OwnerDashboard() {
       if (!response.ok) throw new Error("Failed to reject");
       toast.success("Request rejected");
       loadData();
-    } catch (e: any) { toast.error(e.message); }
+    } catch (e: unknown) { 
+      const error = e as any;
+      toast.error(error.message); 
+    }
   };
 
   const approveRoleRequest = async (request: any) => {
@@ -332,22 +388,42 @@ export default function OwnerDashboard() {
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
-      <h1 className="text-2xl font-display font-bold">Owner Dashboard</h1>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-display font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+            Owner Dashboard
+          </h1>
+          <p className="text-muted-foreground">Admin panel for supply chain management</p>
+        </div>
+        <div className="flex items-center gap-2 bg-muted/30 p-1 rounded-lg border">
+          <Badge variant="outline" className="bg-background/50 border-primary/20 text-primary">Admin Access</Badge>
+          <div className="h-4 w-[1px] bg-muted mx-1" />
+          <div className="flex items-center gap-1.5 px-2">
+            <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Connected</span>
+          </div>
+        </div>
+      </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
-          { l: "Medicines", v: counts.medicines, icon: Pill },
-          { l: "RMS", v: counts.rms, icon: Users },
-          { l: "Manufacturers", v: counts.man, icon: Users },
-          { l: "Distributors", v: counts.dis, icon: Users },
-          { l: "Retailers", v: counts.ret, icon: Users },
+          { l: "Medicines", v: counts.medicines, icon: Pill, color: "text-blue-500", bg: "bg-blue-500/10" },
+          { l: "RMS", v: counts.rms, icon: Factory, color: "text-amber-500", bg: "bg-amber-500/10" },
+          { l: "Manufacturers", v: counts.man, icon: Users, color: "text-purple-500", bg: "bg-purple-500/10" },
+          { l: "Distributors", v: counts.dis, icon: ClipboardList, color: "text-emerald-500", bg: "bg-emerald-500/10" },
+          { l: "Retailers", v: counts.ret, icon: MapPin, color: "text-rose-500", bg: "bg-rose-500/10" },
         ].map(s => (
-          <Card key={s.l} className="glass-card">
-            <CardContent className="p-4 text-center">
-              <s.icon className="h-5 w-5 text-primary mx-auto mb-1" />
+          <Card key={s.l} className="glass-card overflow-hidden group hover:border-primary/50 transition-colors">
+            <CardContent className="p-4 relative">
+              <div className={cn("absolute -right-2 -bottom-2 opacity-10 group-hover:opacity-20 transition-opacity", s.color)}>
+                <s.icon className="h-16 w-16" />
+              </div>
+              <div className={cn("p-2 rounded-lg w-fit mb-3", s.bg)}>
+                <s.icon className={cn("h-4 w-4", s.color)} />
+              </div>
               <div className="text-2xl font-bold font-display">{s.v}</div>
-              <div className="text-xs text-muted-foreground">{s.l}</div>
+              <div className="text-xs text-muted-foreground font-medium">{s.l}</div>
             </CardContent>
           </Card>
         ))}
@@ -368,28 +444,48 @@ export default function OwnerDashboard() {
               <CardTitle className="text-lg font-display">Add Participant</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex gap-2 mb-4">
+              <div className="flex flex-wrap gap-2 mb-6 p-1 bg-muted/30 rounded-lg w-fit">
                 {(["rms", "man", "dis", "ret"] as const).map(t => (
-                  <Button key={t} variant={addType === t ? "default" : "outline"} size="sm" onClick={() => setAddType(t)}>
+                  <Button 
+                    key={t} 
+                    variant={addType === t ? "default" : "ghost"} 
+                    size="sm" 
+                    onClick={() => setAddType(t)}
+                    className={cn("text-xs transition-all", addType === t ? "shadow-sm" : "")}
+                  >
                     {{ rms: "RMS", man: "Manufacturer", dis: "Distributor", ret: "Retailer" }[t]}
                   </Button>
                 ))}
               </div>
               <Form {...participantForm}>
-                <form onSubmit={participantForm.handleSubmit(addParticipant)} className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <form onSubmit={participantForm.handleSubmit(addParticipant)} className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <FormField control={participantForm.control} name="address" render={({ field }) => (
-                    <FormItem><FormLabel>Address</FormLabel><FormControl><Input placeholder="0x..." {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem>
+                      <FormLabel className="text-xs uppercase tracking-wider opacity-70">Ethereum Address</FormLabel>
+                      <FormControl><Input placeholder="0x..." className="bg-background/50" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )} />
                   <FormField control={participantForm.control} name="name" render={({ field }) => (
-                    <FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="Name" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem>
+                      <FormLabel className="text-xs uppercase tracking-wider opacity-70">Participant Name</FormLabel>
+                      <FormControl><Input placeholder="Organization Name" className="bg-background/50" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )} />
                   <FormField control={participantForm.control} name="place" render={({ field }) => (
-                    <FormItem><FormLabel>Place</FormLabel><FormControl><Input placeholder="Location" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem>
+                      <FormLabel className="text-xs uppercase tracking-wider opacity-70">Location</FormLabel>
+                      <FormControl><Input placeholder="City, Country" className="bg-background/50" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )} />
-                  <Button type="submit" disabled={txLoading} className="md:col-span-3">
-                    {txLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                    Add {{ rms: "RMS", man: "Manufacturer", dis: "Distributor", ret: "Retailer" }[addType]}
-                  </Button>
+                  <div className="md:col-span-3 flex justify-end">
+                    <Button type="submit" disabled={txLoading} className="w-full md:w-auto min-w-[200px] shadow-lg shadow-primary/20">
+                      {txLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
+                      Register {{ rms: "RMS", man: "Manufacturer", dis: "Distributor", ret: "Retailer" }[addType]}
+                    </Button>
+                  </div>
                 </form>
               </Form>
             </CardContent>
@@ -437,32 +533,141 @@ export default function OwnerDashboard() {
             <CardHeader><CardTitle className="text-lg font-display">Add Medicine</CardTitle></CardHeader>
             <CardContent>
               <Form {...medicineForm}>
-                <form onSubmit={medicineForm.handleSubmit(addMedicine)} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <form onSubmit={medicineForm.handleSubmit(addMedicine)} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField control={medicineForm.control} name="name" render={({ field }) => (
-                    <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem>
+                      <FormLabel className="text-xs uppercase tracking-wider opacity-70">Medicine Name</FormLabel>
+                      <FormControl><Input placeholder="e.g. Paracetamol" className="bg-background/50" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )} />
                   <FormField control={medicineForm.control} name="batchNumber" render={({ field }) => (
-                    <FormItem><FormLabel>Batch Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem>
+                      <FormLabel className="text-xs uppercase tracking-wider opacity-70">Batch Identification</FormLabel>
+                      <FormControl><Input placeholder="e.g. BATCH-2024-001" className="bg-background/50" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )} />
                   <FormField control={medicineForm.control} name="description" render={({ field }) => (
-                    <FormItem className="md:col-span-2"><FormLabel>Description</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem className="md:col-span-2">
+                      <FormLabel className="text-xs uppercase tracking-wider opacity-70">Product Description</FormLabel>
+                      <FormControl><Input placeholder="Enter detailed description" className="bg-background/50" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )} />
+                  
                   <FormField control={medicineForm.control} name="manufacturingDate" render={({ field }) => (
-                    <FormItem><FormLabel>Manufacturing Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem className="flex flex-col">
+                      <FormLabel className="text-xs uppercase tracking-wider opacity-70">Manufacturing Date</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button variant="outline" className={cn("pl-3 text-left font-normal bg-background/50", !field.value && "text-muted-foreground")}>
+                              {field.value ? format(new Date(field.value), "PPP") : <span>Pick a date</span>}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value ? new Date(field.value) : undefined}
+                            onSelect={(date) => field.onChange(date?.toISOString())}
+                            disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
                   )} />
+
                   <FormField control={medicineForm.control} name="expiryDate" render={({ field }) => (
-                    <FormItem><FormLabel>Expiry Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem className="flex flex-col">
+                      <FormLabel className="text-xs uppercase tracking-wider opacity-70">Expiry Date</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button variant="outline" className={cn("pl-3 text-left font-normal bg-background/50", !field.value && "text-muted-foreground")}>
+                              {field.value ? format(new Date(field.value), "PPP") : <span>Pick a date</span>}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value ? new Date(field.value) : undefined}
+                            onSelect={(date) => field.onChange(date?.toISOString())}
+                            disabled={(date) => date < new Date()}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
                   )} />
+
                   <FormField control={medicineForm.control} name="quantity" render={({ field }) => (
-                    <FormItem><FormLabel>Quantity</FormLabel><FormControl><Input type="number" min={1} {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem>
+                      <FormLabel className="text-xs uppercase tracking-wider opacity-70">Initial Quantity</FormLabel>
+                      <FormControl><Input type="number" min={1} className="bg-background/50" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )} />
                   <FormField control={medicineForm.control} name="price" render={({ field }) => (
-                    <FormItem><FormLabel>Price (Wei)</FormLabel><FormControl><Input type="number" min={0} {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem>
+                      <FormLabel className="text-xs uppercase tracking-wider opacity-70">Price per unit (Wei)</FormLabel>
+                      <FormControl><Input type="number" min={0} className="bg-background/50" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )} />
-                  <Button type="submit" disabled={txLoading} className="md:col-span-2">
-                    {txLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                    Add Medicine
-                  </Button>
+
+                  <div className="md:col-span-2">
+                    <Label className="text-xs uppercase tracking-wider opacity-70 mb-2 block">Product Image</Label>
+                    <div className="flex items-center gap-4">
+                      {image ? (
+                        <div className="relative h-24 w-24 rounded-lg border overflow-hidden group">
+                          <img 
+                            src={URL.createObjectURL(image)} 
+                            alt="Preview" 
+                            className="h-full w-full object-cover transition-transform group-hover:scale-105" 
+                          />
+                          <button 
+                            type="button"
+                            onClick={() => setImage(null)}
+                            className="absolute top-1 right-1 p-1 bg-background/80 rounded-full hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="h-24 w-24 rounded-lg border-2 border-dashed border-muted hover:border-primary/50 hover:bg-primary/5 cursor-pointer flex flex-col items-center justify-center transition-all">
+                          <ImagePlus className="h-6 w-6 text-muted-foreground mb-1" />
+                          <span className="text-[10px] text-muted-foreground font-medium">Upload</span>
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden" 
+                            onChange={(e) => setImage(e.target.files?.[0] || null)} 
+                          />
+                        </label>
+                      )}
+                      <div className="flex-1">
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                          Adding a high-quality product image helps in visual verification across the supply chain. 
+                          Supported formats: JPG, PNG, WEBP (Max 5MB).
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2 flex justify-end mt-2">
+                    <Button type="submit" disabled={txLoading || isUploading} className="w-full md:w-auto min-w-[200px] shadow-lg shadow-primary/20">
+                      {txLoading || isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                      {isUploading ? "Uploading Image..." : "Add Medicine Definition"}
+                    </Button>
+                  </div>
                 </form>
               </Form>
             </CardContent>
@@ -514,8 +719,10 @@ export default function OwnerDashboard() {
           </Card>
         </TabsContent>
 
-        {pendingRequests.length > 0 && (
-          <div className="mt-6 space-y-4">
+
+
+        <TabsContent value="requests" className="space-y-6">
+          {pendingRequests.length > 0 && (
             <Card className="glass-card border-orange-500/50">
               <CardHeader>
                 <CardTitle className="text-lg font-display flex items-center gap-2">
@@ -525,37 +732,35 @@ export default function OwnerDashboard() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {pendingRequests.map(req => (
-                  <Card key={req._id} className="p-4 border-muted">
-                    <div className="flex justify-between items-center gap-4">
-                      <div className="flex gap-4 items-center">
+                  <Card key={req._id} className="p-4 border-muted hover:border-orange-500/30 transition-colors">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                      <div className="flex gap-4 items-center flex-1">
                         {req.imageHash && (
                            <img 
                              src={`https://gateway.pinata.cloud/ipfs/${req.imageHash}`} 
                              alt={req.name} 
-                             className="h-20 w-20 object-cover rounded-md border bg-muted"
+                             className="h-20 w-20 object-cover rounded-md border bg-muted shadow-sm"
                              onError={(e) => (e.currentTarget.src = "https://placehold.co/100x100?text=No+Image")}
                            />
                         )}
-                        <div>
+                        <div className="flex-1">
                           <div className="font-semibold text-primary text-base">{req.name}</div>
-                          <div className="text-sm text-muted-foreground line-clamp-2 max-w-md">{req.description}</div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            Manufacturer: <span className="text-foreground font-medium">{getManufacturerName(req.manufacturerAddress)}</span> | 
-                            Batch: <span className="text-foreground">{req.batchNumber}</span> | 
-                            Qty: <span className="text-foreground">{req.quantity}</span>
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            Mfg Date: <span className="text-foreground">{new Date(req.manufacturingDate).toLocaleDateString()}</span> | 
-                            Exp Date: <span className="text-foreground">{new Date(req.expiryDate).toLocaleDateString()}</span>
+                          <div className="text-sm text-muted-foreground line-clamp-1 italic mb-1">{req.description}</div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1 text-[11px] uppercase tracking-wider opacity-80">
+                            <div>Manufacturer: <span className="text-foreground font-bold">{getManufacturerName(req.manufacturerAddress)}</span></div>
+                            <div>Batch: <span className="text-foreground font-bold">{req.batchNumber}</span></div>
+                            <div>Quantity: <span className="text-foreground font-bold">{req.quantity}</span></div>
+                            <div>Mfg: <span className="text-foreground font-bold">{new Date(req.manufacturingDate).toLocaleDateString()}</span></div>
+                            <div>Exp: <span className="text-foreground font-bold">{new Date(req.expiryDate).toLocaleDateString()}</span></div>
                           </div>
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={() => approveRequest(req)} disabled={txLoading}>
+                      <div className="flex gap-2 w-full md:w-auto">
+                        <Button size="sm" onClick={() => approveRequest(req)} disabled={txLoading} className="flex-1 md:flex-none">
                           {txLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
                           Approve
                         </Button>
-                        <Button size="sm" variant="destructive" onClick={() => rejectRequest(req._id)} disabled={txLoading}>
+                        <Button size="sm" variant="destructive" onClick={() => rejectRequest(req._id)} disabled={txLoading} className="flex-1 md:flex-none">
                           Reject
                         </Button>
                       </div>
@@ -564,14 +769,12 @@ export default function OwnerDashboard() {
                 ))}
               </CardContent>
             </Card>
-          </div>
-        )}
+          )}
 
-        <TabsContent value="requests" className="space-y-4">
           <Card className="glass-card">
             <CardHeader>
               <CardTitle className="text-lg font-display flex items-center gap-2">
-                <ClipboardList className="h-5 w-5 text-primary" /> Pending Role Registration Requests
+                <UserPlus className="h-5 w-5 text-primary" /> Pending Role Registration Requests
               </CardTitle>
               <CardDescription>Review and approve users who want to join the supply chain as specific participants.</CardDescription>
             </CardHeader>
@@ -633,33 +836,60 @@ export default function OwnerDashboard() {
 
         {/* Settings Tab */}
         <TabsContent value="settings" className="space-y-4">
-          <Card className="glass-card">
+          <Card className="glass-card border-destructive/20 bg-destructive/5">
             <CardHeader>
-              <CardTitle className="text-lg font-display flex items-center gap-2">
-                <ShieldAlert className="h-5 w-5" /> Contract Controls
+              <CardTitle className="text-lg font-display flex items-center gap-2 text-destructive">
+                <ShieldAlert className="h-5 w-5" /> Critical Contract Controls
               </CardTitle>
+              <CardDescription>Emergency operations for the supply chain smart contract.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <Button onClick={() => handlePause(true)} disabled={txLoading} variant="destructive">
-                  <Pause className="h-4 w-4 mr-2" />Pause Contract
+              <div className="flex flex-wrap gap-4">
+                <Button onClick={() => handlePause(true)} disabled={txLoading} variant="destructive" className="shadow-lg shadow-destructive/20">
+                  <Pause className="h-4 w-4 mr-2" />Pause All Operations
                 </Button>
-                <Button onClick={() => handlePause(false)} disabled={txLoading} variant="outline">
-                  <Play className="h-4 w-4 mr-2" />Unpause Contract
+                <Button onClick={() => handlePause(false)} disabled={txLoading} variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10">
+                  <Play className="h-4 w-4 mr-2" />Resume Operations
                 </Button>
+              </div>
+              <div className="bg-destructive/10 p-4 rounded-lg flex gap-3 items-start border border-destructive/20">
+                <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <div className="text-sm text-destructive-foreground">
+                  <p className="font-bold">Security Notice:</p>
+                  <p>Pausing the contract will freeze all transactions, including manufacturing, shipping, and transfers. Only use this in case of a detected security breach or critical bug.</p>
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="glass-card">
+          <Card className="glass-card border-orange-500/20">
             <CardHeader>
-              <CardTitle className="text-lg font-display">Transfer Ownership</CardTitle>
-              <CardDescription>Transfer contract ownership to a new address. This action is irreversible.</CardDescription>
+              <CardTitle className="text-lg font-display flex items-center gap-2">
+                <Activity className="h-5 w-5 text-orange-500" /> Transfer Ownership
+              </CardTitle>
+              <CardDescription>Hand over administrative control to another Ethereum address.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex gap-2">
-                <Input placeholder="New owner address (0x...)" value={newOwner} onChange={e => setNewOwner(e.target.value)} />
-                <Button onClick={transferOwnership} disabled={txLoading} variant="destructive">Transfer</Button>
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1">
+                  <Label htmlFor="new-owner" className="text-xs uppercase tracking-wider mb-1.5 block opacity-70">New Admin Address</Label>
+                  <Input 
+                    id="new-owner"
+                    placeholder="0x..." 
+                    value={newOwner} 
+                    onChange={e => setNewOwner(e.target.value)} 
+                    className="font-mono bg-background/50"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button onClick={transferOwnership} disabled={txLoading} variant="destructive" className="w-full md:w-auto px-8">
+                    Relinquish Control
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-4 p-4 bg-orange-500/5 border border-orange-500/20 rounded-lg flex gap-3 text-sm text-orange-700 dark:text-orange-400">
+                <AlertTriangle className="h-5 w-5 shrink-0" />
+                <p><strong>Warning:</strong> Ownership transfer is permanent. Ensure the target address is correct and belongs to a trusted entity.</p>
               </div>
             </CardContent>
           </Card>

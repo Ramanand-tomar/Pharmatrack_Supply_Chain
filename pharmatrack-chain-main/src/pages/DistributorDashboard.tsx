@@ -110,12 +110,12 @@ export default function DistributorDashboard() {
                       <div className="font-semibold">{med.name} <span className="text-sm text-muted-foreground">#{med.id}</span></div>
                       <div className="text-sm text-muted-foreground">{med.description}</div>
                     </div>
-                    <Button onClick={() => distribute(med.id)} disabled={txLoading === med.id} size="sm">
-                      {txLoading === med.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
+                    <Button onClick={() => distribute(med.id)} disabled={txLoading === med.id || med.isBatchRecalled} size="sm">
+                      {txLoading === med.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Truck className="h-4 w-4 mr-1" />}
                       Distribute
                     </Button>
                   </div>
-                  <MedicineStageProgress currentStage={med.stage} />
+                  <MedicineStageProgress currentStage={med.stage} isBatchRecalled={med.isBatchRecalled} />
                 </Card>
               ))}
             </div>
@@ -139,7 +139,12 @@ export default function DistributorDashboard() {
                 <TableRow key={m.id}>
                   <TableCell>{m.id}</TableCell>
                   <TableCell className="font-medium">{m.name}</TableCell>
-                  <TableCell><Badge>{STAGES[m.stage]}</Badge></TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={m.stage === 6 ? "destructive" : "default"}>{STAGES[m.stage]}</Badge>
+                      {m.isBatchRecalled && <Badge variant="destructive" className="animate-pulse">BATCH RECALLED</Badge>}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-xs font-mono">{formatTime(m.distributionTime)}</TableCell>
                 </TableRow>
               ))}

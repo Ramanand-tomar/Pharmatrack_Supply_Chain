@@ -221,17 +221,27 @@ export default function LandingPage() {
                   <h3 className="text-xl font-display font-bold">{searchResult.name}</h3>
                   <p className="text-sm text-muted-foreground">{searchResult.description}</p>
                 </div>
-                <Badge variant={searchResult.stage === 5 ? "default" : "secondary"} className="shrink-0">
+                <Badge variant={searchResult.stage === 6 ? "destructive" : searchResult.stage === 5 ? "default" : "secondary"} className="shrink-0">
                   {STAGES[searchResult.stage]}
                 </Badge>
               </div>
-              <Alert className="bg-green-500/10 border-green-500/50 text-green-600 dark:text-green-400">
-                <ShieldCheck className="h-4 w-4" />
-                <AlertTitle className="font-display font-bold">Authenticity Verified</AlertTitle>
-                <AlertDescription className="text-xs">
-                  This product has been successfully verified on the blockchain.
-                </AlertDescription>
-              </Alert>
+              {searchResult.stage === 6 ? (
+                <Alert variant="destructive" className="bg-destructive/10 border-destructive/50 text-destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle className="font-display font-bold">Product Recalled</AlertTitle>
+                  <AlertDescription className="text-xs">
+                    WARNING: This product has been recalled by the manufacturer and should not be consumed.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Alert className="bg-green-500/10 border-green-500/50 text-green-600 dark:text-green-400">
+                  <ShieldCheck className="h-4 w-4" />
+                  <AlertTitle className="font-display font-bold">Authenticity Verified</AlertTitle>
+                  <AlertDescription className="text-xs">
+                    This product has been successfully verified on the blockchain.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-4">

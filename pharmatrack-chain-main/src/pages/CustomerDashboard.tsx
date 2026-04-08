@@ -173,7 +173,9 @@ export default function CustomerDashboard() {
                           <div className="flex items-center gap-2">
                             <h3 className="text-lg font-bold">{med.name}</h3>
                             <Badge variant="outline">#{med.id}</Badge>
-                            <Badge>{STAGES[med.stage]}</Badge>
+                            <Badge variant={med.stage === 6 || med.isBatchRecalled ? "destructive" : "default"}>
+                              {med.isBatchRecalled ? "BATCH RECALLED" : STAGES[med.stage]}
+                            </Badge>
                           </div>
                           <p className="text-sm text-muted-foreground">{med.description}</p>
                           <div className="flex gap-4 text-xs text-muted-foreground mt-2">
@@ -261,21 +263,33 @@ export default function CustomerDashboard() {
                       <div className="flex items-center gap-2">
                         <h3 className="text-xl font-display font-bold">{searchResult.name}</h3>
                         <Badge variant="outline">#{searchResult.id}</Badge>
-                        <Badge variant={searchResult.stage === 5 ? "default" : "secondary"}>
-                          {STAGES[searchResult.stage]}
+                        <Badge variant={searchResult.stage === 6 || searchResult.isBatchRecalled ? "destructive" : (searchResult.stage === 5 ? "default" : "secondary")}>
+                          {searchResult.isBatchRecalled ? "BATCH RECALLED" : STAGES[searchResult.stage]}
                         </Badge>
                       </div>
                       <p className="text-muted-foreground">{searchResult.description}</p>
                     </div>
                   </div>
 
-                  <Alert className="bg-green-500/10 border-green-500/50 text-green-600 dark:text-green-400">
-                    <ShieldCheck className="h-4 w-4" />
-                    <AlertTitle className="font-display font-bold uppercase tracking-wider text-xs">Blockchain Verified</AlertTitle>
-                    <AlertDescription className="text-xs">
-                      This product is authentic and its entire journey is recorded on the Ethereum blockchain.
-                    </AlertDescription>
-                  </Alert>
+                  {(searchResult.stage === 6 || searchResult.isBatchRecalled) ? (
+                    <Alert variant="destructive" className="animate-pulse border-2">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle className="font-display font-bold uppercase tracking-wider text-xs">Safety Warning: Recalled Product</AlertTitle>
+                      <AlertDescription className="text-xs font-semibold">
+                        {searchResult.isBatchRecalled 
+                          ? "This product belongs to a batch that has been officially RECALLED. DO NOT CONSUME. Please return it to your retailer." 
+                          : "This specific product has been officially RECALLED. DO NOT CONSUME."}
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <Alert className="bg-green-500/10 border-green-500/50 text-green-600 dark:text-green-400">
+                      <ShieldCheck className="h-4 w-4" />
+                      <AlertTitle className="font-display font-bold uppercase tracking-wider text-xs">Blockchain Verified</AlertTitle>
+                      <AlertDescription className="text-xs">
+                        This product is authentic and its entire journey is recorded on the Ethereum blockchain.
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-4">

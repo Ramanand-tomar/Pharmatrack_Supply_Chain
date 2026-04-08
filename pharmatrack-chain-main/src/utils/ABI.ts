@@ -1,4 +1,4 @@
-﻿export const ABI = [
+export const ABI = [
 	{
 		"inputs": [],
 		"stateMutability": "nonpayable",
@@ -1401,6 +1401,57 @@
 	{
 		"inputs": [],
 		"name": "unpause",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "batchNumber",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "timestamp",
+				"type": "uint256"
+			}
+		],
+		"name": "BatchRecalled",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
+		],
+		"name": "batchRecalled",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_batchNumber",
+				"type": "string"
+			}
+		],
+		"name": "recallBatch",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"

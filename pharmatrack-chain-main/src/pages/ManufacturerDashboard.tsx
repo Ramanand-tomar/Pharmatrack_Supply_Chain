@@ -7,11 +7,15 @@ import { Badge } from "@/components/ui/badge";
 import { MedicineStageProgress } from "@/components/MedicineStageProgress";
 import { STAGES, type Medicine, API_URL } from "@/lib/contract";
 import { toast } from "sonner";
-import { Loader2, Factory, CheckCircle, AlertTriangle, Plus, ClipboardList, ImagePlus } from "lucide-react";
+import { Loader2, Factory, CheckCircle, AlertTriangle, Plus, ClipboardList, ImagePlus, Calendar as CalendarIcon, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -24,6 +28,11 @@ const requestSchema = z.object({
   expiryDate: z.string().min(1),
   quantity: z.coerce.number().min(1),
   price: z.coerce.number().min(0),
+});
+
+const recallBatchSchema = z.object({
+  batchNumber: z.string().min(1),
+  reason: z.string().min(5),
 });
 
 export default function ManufacturerDashboard() {
@@ -40,6 +49,13 @@ export default function ManufacturerDashboard() {
     resolver: zodResolver(requestSchema),
     defaultValues: { name: "", description: "", batchNumber: "", manufacturingDate: "", expiryDate: "", quantity: 1, price: 0 }
   });
+
+  const recallForm = useForm<z.infer<typeof recallBatchSchema>>({
+    resolver: zodResolver(recallBatchSchema),
+    defaultValues: { batchNumber: "", reason: "" }
+  });
+
+  const [isRecallModalOpen, setIsRecallModalOpen] = useState(false);
 
   const loadData = async () => {
     if (!contract || !roleId) return;
@@ -65,7 +81,10 @@ export default function ManufacturerDashboard() {
       await tx.wait();
       toast.success("Medicine manufactured!");
       loadData();
-    } catch (e: any) { toast.error(e.reason || e.message || "Failed"); }
+    } catch (e: unknown) { 
+      const error = e as any;
+      toast.error(error.reason || error.message || "Failed"); 
+    }
     setTxLoading(null);
   };
 
@@ -77,7 +96,10 @@ export default function ManufacturerDashboard() {
       await tx.wait();
       toast.success("Medicine recalled!");
       loadData();
-    } catch (e: any) { toast.error(e.reason || e.message || "Failed"); }
+    } catch (e: unknown) { 
+      const error = e as any;
+      toast.error(error.reason || error.message || "Failed"); 
+    }
     setTxLoading(null);
   };
 
@@ -107,9 +129,42 @@ export default function ManufacturerDashboard() {
       setIsRequestModalOpen(false);
       form.reset();
       setImage(null);
-    } catch (e: any) {
-      toast.error(e.message || "Request failed");
+    } catch (e: unknown) {
+      const error = e as any;
+      toast.error(error.message || "Request failed");
       setIsUploading(false);
+    }
+  };
+
+  const onRecallBatch = async (values: z.infer<typeof recallBatchSchema>) => {
+    if (!contract) return;
+    setTxLoading(999999);
+    try {
+      const tx = await contract.recallBatch(values.batchNumber);
+      toast.info("Submitting on-chain recall...");
+      await tx.wait();
+
+      const response = await fetch(`${API_URL}/api/products/recall-batch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          batchNumber: values.batchNumber,
+          reason: values.reason,
+          manufacturerAddress: account
+        })
+      });
+
+      if (!response.ok) throw new Error("Failed to broadcast recall alert");
+      
+      toast.success("Batch successfully recalled and stakeholders notified!");
+      setIsRecallModalOpen(false);
+      recallForm.reset();
+      loadData();
+    } catch (e: unknown) {
+      const error = e as any;
+      toast.error(error.reason || error.message || "Recall failed");
+    } finally {
+      setTxLoading(null);
     }
   };
   const formatTime = (ts: number) => ts ? new Date(ts * 1000).toLocaleString() : "—";
@@ -167,62 +222,226 @@ export default function ManufacturerDashboard() {
         <h1 className="text-2xl font-display font-bold flex items-center gap-2">
           <Factory className="h-6 w-6 text-primary" /> Manufacturer Dashboard
         </h1>
-        <Dialog open={isRequestModalOpen} onOpenChange={setIsRequestModalOpen}>
-          <DialogTrigger asChild>
-            <Button className="font-display">
-              <Plus className="h-4 w-4 mr-2" /> Request New Product
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Request Product Creation</DialogTitle>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmitRequest)} className="space-y-4">
-                <FormField control={form.control} name="name" render={({ field }) => (
-                  <FormItem><FormLabel>Product Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="description" render={({ field }) => (
-                  <FormItem><FormLabel>Description</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField control={form.control} name="batchNumber" render={({ field }) => (
-                    <FormItem><FormLabel>Batch Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+        <div className="flex gap-2">
+          <Dialog open={isRecallModalOpen} onOpenChange={setIsRecallModalOpen}>
+            <DialogTrigger asChild>
+              <Button variant="destructive" className="font-display">
+                <AlertTriangle className="h-4 w-4 mr-2" /> Recall Entire Batch
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle className="text-destructive flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5" /> Batch Recall Authorization
+                </DialogTitle>
+              </DialogHeader>
+              <Form {...recallForm}>
+                <form onSubmit={recallForm.handleSubmit(onRecallBatch)} className="space-y-4 pt-4">
+                  <div className="bg-destructive/10 p-3 rounded-md text-sm text-destructive-foreground flex gap-2">
+                    <AlertTriangle className="h-5 w-5 shrink-0" />
+                    <p><strong>Warning:</strong> This action is irreversible. All products in this batch will be blocked from further transitions.</p>
+                  </div>
+                  <FormField control={recallForm.control} name="batchNumber" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Batch Number to Recall</FormLabel>
+                      <FormControl><Input placeholder="e.g. BATCH-2024-001" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )} />
-                  <FormField control={form.control} name="quantity" render={({ field }) => (
-                    <FormItem><FormLabel>Quantity</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormField control={recallForm.control} name="reason" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Reason for Recall</FormLabel>
+                      <FormControl><Input placeholder="e.g. Quality control failure in raw materials" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )} />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField control={form.control} name="manufacturingDate" render={({ field }) => (
-                    <FormItem><FormLabel>Mfg Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                  <Button type="submit" variant="destructive" className="w-full" disabled={txLoading === 999999}>
+                    {txLoading === 999999 ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <AlertTriangle className="mr-2 h-4 w-4" />}
+                    Execute Batch Recall
+                  </Button>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={isRequestModalOpen} onOpenChange={setIsRequestModalOpen}>
+            <DialogTrigger asChild>
+              <Button className="font-display">
+                <Plus className="h-4 w-4 mr-2" /> Request New Product
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Request Product Creation</DialogTitle>
+              </DialogHeader>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmitRequest)} className="space-y-4">
+                  <FormField control={form.control} name="name" render={({ field }) => (
+                    <FormItem><FormLabel>Product Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
-                  <FormField control={form.control} name="expiryDate" render={({ field }) => (
-                    <FormItem><FormLabel>Exp Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormField control={form.control} name="description" render={({ field }) => (
+                    <FormItem><FormLabel>Description</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
-                </div>
-                <FormField control={form.control} name="price" render={({ field }) => (
-                  <FormItem><FormLabel>Price (Wei)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <div className="space-y-2">
-                  <FormLabel>Product Image</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => setImage(e.target.files ? e.target.files[0] : null)} 
-                    />
-                  </FormControl>
-                  {image && <p className="text-xs text-muted-foreground flex items-center gap-1"><ImagePlus className="h-3 w-3" /> {image.name}</p>}
-                </div>
-                <Button type="submit" className="w-full" disabled={isUploading}>
-                  {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Submit Request
-                </Button>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField control={form.control} name="batchNumber" render={({ field }) => (
+                      <FormItem><FormLabel>Batch Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="quantity" render={({ field }) => (
+                      <FormItem><FormLabel>Quantity</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField control={form.control} name="manufacturingDate" render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>Mfg Date</FormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant={"outline"}
+                                className={cn(
+                                  "w-full pl-3 text-left font-normal",
+                                  !field.value && "text-muted-foreground"
+                                )}
+                              >
+                                {field.value ? (
+                                  format(new Date(field.value), "PPP")
+                                ) : (
+                                  <span>Pick a date</span>
+                                )}
+                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={field.value ? new Date(field.value) : undefined}
+                              onSelect={(date) => field.onChange(date?.toISOString().split('T')[0])}
+                              disabled={(date) =>
+                                date > new Date() || date < new Date("1900-01-01")
+                              }
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="expiryDate" render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>Exp Date</FormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant={"outline"}
+                                className={cn(
+                                  "w-full pl-3 text-left font-normal",
+                                  !field.value && "text-muted-foreground"
+                                )}
+                              >
+                                {field.value ? (
+                                  format(new Date(field.value), "PPP")
+                                ) : (
+                                  <span>Pick a date</span>
+                                )}
+                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={field.value ? new Date(field.value) : undefined}
+                              onSelect={(date) => field.onChange(date?.toISOString().split('T')[0])}
+                              disabled={(date) =>
+                                date < new Date()
+                              }
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                  </div>
+                  <FormField control={form.control} name="price" render={({ field }) => (
+                    <FormItem><FormLabel>Price (Wei)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <div className="space-y-3">
+                    <FormLabel>Product Image</FormLabel>
+                    <div 
+                      className={cn(
+                        "border-2 border-dashed rounded-lg p-4 transition-all duration-200 cursor-pointer hover:border-primary/50",
+                        image ? "bg-muted/50 border-primary/30" : "bg-muted/10 border-muted-foreground/20"
+                      )}
+                      onClick={() => document.getElementById('product-image-input')?.click()}
+                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                          setImage(e.dataTransfer.files[0]);
+                        }
+                      }}
+                    >
+                      <input 
+                        id="product-image-input"
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden"
+                        onChange={(e) => setImage(e.target.files ? e.target.files[0] : null)} 
+                      />
+                      
+                      {!image ? (
+                        <div className="flex flex-col items-center justify-center py-4 text-muted-foreground">
+                          <ImagePlus className="h-10 w-10 mb-2 opacity-30" />
+                          <p className="text-sm font-medium">Click to upload or drag and drop</p>
+                          <p className="text-xs">PNG, JPG or WEBP (MAX. 2MB)</p>
+                        </div>
+                      ) : (
+                        <div className="relative group">
+                          <div className="flex items-center gap-3">
+                            <div className="h-16 w-16 rounded overflow-hidden border bg-background shrink-0">
+                              <img 
+                                src={URL.createObjectURL(image)} 
+                                alt="Preview" 
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{image.name}</p>
+                              <p className="text-xs text-muted-foreground">{(image.size / 1024).toFixed(0)} KB</p>
+                            </div>
+                            <Button 
+                              type="button" 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setImage(null);
+                                const input = document.getElementById('product-image-input') as HTMLInputElement;
+                                if (input) input.value = '';
+                              }}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={isUploading}>
+                    {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Submit Request
+                  </Button>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <Card className="glass-card">
@@ -239,12 +458,12 @@ export default function ManufacturerDashboard() {
                       <div className="font-semibold">{med.name} <span className="text-sm text-muted-foreground">#{med.id}</span></div>
                       <div className="text-sm text-muted-foreground">{med.description}</div>
                     </div>
-                    <Button onClick={() => manufacture(med.id)} disabled={txLoading === med.id} size="sm">
+                    <Button onClick={() => manufacture(med.id)} disabled={txLoading === med.id || med.isBatchRecalled} size="sm">
                       {txLoading === med.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
                       Manufacture
                     </Button>
                   </div>
-                  <MedicineStageProgress currentStage={med.stage} />
+                  <MedicineStageProgress currentStage={med.stage} isBatchRecalled={med.isBatchRecalled} />
                 </Card>
               ))}
             </div>
@@ -267,11 +486,25 @@ export default function ManufacturerDashboard() {
               ) : history.map(m => (
                 <TableRow key={m.id}>
                   <TableCell>{m.id}</TableCell>
-                  <TableCell className="font-medium">{m.name}</TableCell>
-                  <TableCell><Badge>{STAGES[m.stage]}</Badge></TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex flex-col">
+                      <span>{m.name}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">{m.batchNumber}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={m.stage === 6 ? "destructive" : "default"}>
+                        {STAGES[m.stage]}
+                      </Badge>
+                      {m.isBatchRecalled && (
+                        <Badge variant="destructive" className="animate-pulse">BATCH RECALLED</Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-xs font-mono">{formatTime(m.manufactureTime)}</TableCell>
                   <TableCell>
-                    {m.stage < 5 && (
+                    {m.stage < 5 && !m.isBatchRecalled && (
                       <Button variant="destructive" size="sm" onClick={() => recall(m.id)} disabled={txLoading === m.id}>
                         <AlertTriangle className="h-3 w-3 mr-1" />Recall
                       </Button>

@@ -1,5 +1,5 @@
 import {
-  Home, Users, Pill, Settings, Truck, Factory, Package, ShoppingCart, Search, ShoppingBag, LogOut, User as UserIcon
+  Home, Users, Pill, Settings, Truck, Factory, Package, ShoppingCart, Search, ShoppingBag, LogOut, User as UserIcon, Wallet
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -11,12 +11,12 @@ import {
 } from "@/components/ui/sidebar";
 
 const publicItems = [
-  { title: "Track Products", url: "/", icon: Search },
+  { title: "Track Product", url: "/#tracking-section", icon: Search },
 ];
 
 const customerItems = [
   { title: "My Purchases", url: "/customer", icon: ShoppingBag },
-  { title: "Track Products", url: "/customer?tab=tracking", icon: Search },
+  { title: "Track Product", url: "/customer?tab=tracking", icon: Search },
 ];
 
 const ownerItems = [
@@ -46,7 +46,24 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
-  const { role, account, disconnectWallet } = useWeb3();
+  const { role, account, connectWallet, disconnectWallet, isConnecting } = useWeb3();
+
+  // Helper to determine if a link is active, including query param awareness
+  const isActiveLink = (toUrl: string) => {
+    const currentPath = location.pathname;
+    const currentSearch = location.search;
+    
+    // Split URL into path and search
+    const [targetPath, targetSearch] = toUrl.split('?');
+    
+    if (targetSearch) {
+      // If target has search params, both path and search must match
+      return currentPath === targetPath && currentSearch === `?${targetSearch}`;
+    }
+    
+    // Default path matching
+    return currentPath === targetPath;
+  };
 
   const roleMenuMap: Record<string, typeof publicItems> = {
     owner: ownerItems,
@@ -73,9 +90,9 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild>
                     <NavLink
                       to={item.url}
-                      end
                       className="hover:bg-sidebar-accent/50"
                       activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                      isActive={() => isActiveLink(item.url)}
                     >
                       <item.icon className="mr-2 h-4 w-4" />
                       {!collapsed && <span>{item.title}</span>}
@@ -94,15 +111,15 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild tooltip="Track Products">
+                  <SidebarMenuButton asChild tooltip="Track Product">
                     <NavLink
-                      to="/"
-                      end
+                      to="/#tracking-section"
                       className="hover:bg-sidebar-accent/50"
                       activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                      isActive={() => isActiveLink("/#tracking-section")}
                     >
                       <Search className="mr-2 h-4 w-4" />
-                      {!collapsed && <span>Track Products</span>}
+                      {!collapsed && <span>Track Product</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -135,16 +152,30 @@ export function AppSidebar() {
             </div>
           </SidebarMenuItem>
           
-          <SidebarMenuItem>
-            <SidebarMenuButton 
-              onClick={disconnectWallet}
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              tooltip="Logout"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              {!collapsed && <span>Logout</span>}
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {account ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton 
+                onClick={disconnectWallet}
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                tooltip="Disconnect Wallet"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                {!collapsed && <span>Disconnect</span>}
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : (
+            <SidebarMenuItem>
+              <SidebarMenuButton 
+                onClick={connectWallet}
+                disabled={isConnecting}
+                className="text-primary hover:text-primary hover:bg-primary/10"
+                tooltip="Connect Wallet"
+              >
+                <Wallet className="mr-2 h-4 w-4" />
+                {!collapsed && <span>{isConnecting ? "Connecting..." : "Connect Wallet"}</span>}
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>

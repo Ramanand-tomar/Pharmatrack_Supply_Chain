@@ -4,7 +4,7 @@ export const RPC_URL = import.meta.env.VITE_RPC_URL || "https://ethereum-sepolia
 export const NETWORK_NAME = import.meta.env.VITE_NETWORK_NAME || "Sepolia";
 import { ABI } from "../utils/ABI"
 
-export const STAGES = ["Init", "Raw Material Supply", "Manufacture", "Distribution", "Retail", "Sold"] as const;
+export const STAGES = ["Init", "Raw Material Supply", "Manufacture", "Distribution", "Retail", "Sold", "Recalled"] as const;
 export type Stage = typeof STAGES[number];
 
 export const STAGE_COLORS: Record<number, string> = {
@@ -14,6 +14,7 @@ export const STAGE_COLORS: Record<number, string> = {
   3: "hsl(var(--chart-4))",
   4: "hsl(var(--secondary))",
   5: "hsl(var(--success))",
+  6: "hsl(var(--destructive))",
 };
 
 export interface Medicine {
@@ -42,6 +43,7 @@ export interface Medicine {
   rating: number;
   stage: number;
   imageHash?: string;
+  isBatchRecalled?: boolean;
 }
 
 export interface Participant {

@@ -191,6 +191,12 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       try {
+        med.isBatchRecalled = await c.batchRecalled(med.batchNumber);
+      } catch (e) {
+        console.warn("Failed to fetch batch recall status", e);
+      }
+
+      try {
         const metaRes = await fetch(`${API_URL}/api/metadata/${id}`);
         const meta = await metaRes.json();
         if (meta.imageHash) med.imageHash = meta.imageHash;

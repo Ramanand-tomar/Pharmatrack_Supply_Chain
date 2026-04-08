@@ -20,10 +20,13 @@ export function ProductTimeline({ medicine, className }: ProductTimelineProps) {
       medicine.retailTime,
       medicine.soldTime
     ];
+    const time = times[i];
+    const stageIdx = i + 1;
+    
     return {
-      time: times[i],
-      isCompleted: i < currentStage || (i === 4 && currentStage === 5), // Sold is final
-      isCurrent: i === currentStage && currentStage < 5,
+      time,
+      isCompleted: time > 0,
+      isCurrent: currentStage === stageIdx && currentStage !== 6,
     };
   };
 

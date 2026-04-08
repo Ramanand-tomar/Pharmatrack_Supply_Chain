@@ -123,12 +123,12 @@ export default function RetailerDashboard() {
                       <div className="font-semibold">{med.name} <span className="text-sm text-muted-foreground">#{med.id}</span></div>
                       <div className="text-sm text-muted-foreground">{med.description}</div>
                     </div>
-                    <Button onClick={() => retail(med.id)} disabled={txLoading === med.id} size="sm">
+                    <Button onClick={() => retail(med.id)} disabled={txLoading === med.id || med.isBatchRecalled} size="sm">
                       {txLoading === med.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
                       Receive
                     </Button>
                   </div>
-                  <MedicineStageProgress currentStage={med.stage} />
+                  <MedicineStageProgress currentStage={med.stage} isBatchRecalled={med.isBatchRecalled} />
                 </Card>
               ))}
             </div>
@@ -150,7 +150,7 @@ export default function RetailerDashboard() {
                     <div className="font-semibold">{med.name} <span className="text-sm text-muted-foreground">#{med.id}</span></div>
                     <div className="text-sm text-muted-foreground">{med.description}</div>
                   </div>
-                  <MedicineStageProgress currentStage={med.stage} />
+                  <MedicineStageProgress currentStage={med.stage} isBatchRecalled={med.isBatchRecalled} />
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
                     <div>
                       <Label className="text-xs">Consumer Address</Label>
@@ -172,7 +172,7 @@ export default function RetailerDashboard() {
                         ))}
                       </div>
                     </div>
-                    <Button onClick={() => sell(med.id)} disabled={txLoading === med.id}>
+                    <Button onClick={() => sell(med.id)} disabled={txLoading === med.id || med.isBatchRecalled}>
                       {txLoading === med.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
                       Sell
                     </Button>
@@ -200,7 +200,14 @@ export default function RetailerDashboard() {
               ) : history.map(m => (
                 <TableRow key={m.id}>
                   <TableCell>{m.id}</TableCell>
-                  <TableCell className="font-medium">{m.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex flex-col">
+                      <span>{m.name}</span>
+                      <div className="flex gap-1">
+                        {m.isBatchRecalled && <Badge variant="destructive" className="h-4 p-1 text-[8px] animate-pulse">BATCH RECALLED</Badge>}
+                      </div>
+                    </div>
+                  </TableCell>
                   <TableCell className="font-mono text-xs">{truncAddr(m.consumer)}</TableCell>
                   <TableCell>{"⭐".repeat(m.rating)}</TableCell>
                   <TableCell className="text-xs font-mono">{formatTime(m.soldTime)}</TableCell>

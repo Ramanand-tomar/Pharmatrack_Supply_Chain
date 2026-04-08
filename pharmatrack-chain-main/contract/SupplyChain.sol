@@ -28,6 +28,7 @@ contract SupplyChain {
     event MedicineRecalled(uint256 medicineId);
     event MedicineSold(uint256 medicineId, address consumer, uint8 rating);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event BatchRecalled(string batchNumber, uint256 timestamp);
     event Paused(address account);
     event Unpaused(address account);
 
@@ -161,6 +162,7 @@ contract SupplyChain {
     mapping(uint256 => Distributor) public dis;
     mapping(uint256 => Retailer) public ret;
     mapping(uint256 => Medicine) public medicines;
+    mapping(string => bool) public batchRecalled;
 
     // ********** Constructor **********
     constructor() {
@@ -373,6 +375,7 @@ contract SupplyChain {
         require(_medicineId > 0 && _medicineId <= medicineCtr, "Invalid medicine ID");
         Medicine storage med = medicines[_medicineId];
         require(med.stage == STAGE.Init, "Medicine not in Init stage");
+        require(!batchRecalled[med.batchNumber], "Batch has been recalled");
         uint256 rmsId = rmsAddressToId[msg.sender];
         require(med.assignedRMSid == rmsId, "You are not the assigned RMS for this medicine");
         med.RMSid = rmsId;
@@ -385,6 +388,7 @@ contract SupplyChain {
         require(_medicineId > 0 && _medicineId <= medicineCtr, "Invalid medicine ID");
         Medicine storage med = medicines[_medicineId];
         require(med.stage == STAGE.RawMaterialSupply, "Medicine not in RawMaterialSupply stage");
+        require(!batchRecalled[med.batchNumber], "Batch has been recalled");
         uint256 manId = manAddressToId[msg.sender];
         require(med.assignedMANid == manId, "You are not the assigned Manufacturer for this medicine");
         med.MANid = manId;
@@ -397,6 +401,7 @@ contract SupplyChain {
         require(_medicineId > 0 && _medicineId <= medicineCtr, "Invalid medicine ID");
         Medicine storage med = medicines[_medicineId];
         require(med.stage == STAGE.Manufacture, "Medicine not in Manufacture stage");
+        require(!batchRecalled[med.batchNumber], "Batch has been recalled");
         uint256 disId = disAddressToId[msg.sender];
         require(med.assignedDISid == disId, "You are not the assigned Distributor for this medicine");
         med.DISid = disId;
@@ -409,6 +414,7 @@ contract SupplyChain {
         require(_medicineId > 0 && _medicineId <= medicineCtr, "Invalid medicine ID");
         Medicine storage med = medicines[_medicineId];
         require(med.stage == STAGE.Distribution, "Medicine not in Distribution stage");
+        require(!batchRecalled[med.batchNumber], "Batch has been recalled");
         uint256 retId = retAddressToId[msg.sender];
         require(med.assignedRETid == retId, "You are not the assigned Retailer for this medicine");
         med.RETid = retId;
@@ -423,6 +429,7 @@ contract SupplyChain {
         require(_rating >= 1 && _rating <= 5, "Rating must be between 1 and 5");
         Medicine storage med = medicines[_medicineId];
         require(med.stage == STAGE.Retail, "Medicine not in Retail stage");
+        require(!batchRecalled[med.batchNumber], "Batch has been recalled");
         uint256 retId = retAddressToId[msg.sender];
         require(med.assignedRETid == retId, "You are not the assigned Retailer for this medicine");
         require(med.RETid == retId, "Retailer mismatch");
@@ -447,6 +454,18 @@ contract SupplyChain {
         med.stage = STAGE.Recalled;
         emit MedicineRecalled(_medicineId);
         emit StageChanged(_medicineId, STAGE.Recalled, block.timestamp);
+    }
+
+    function recallBatch(string calldata _batchNumber) external whenNotPaused {
+        if (msg.sender != owner) {
+            uint256 manId = manAddressToId[msg.sender];
+            require(manId > 0 && man[manId].active, "Only owner or active manufacturer can recall a batch");
+            // Note: We don't strictly enforce that the manufacturer must have products in the batch here,
+            // as it would require iterating over all products. 
+            // In a real system, we'd check if the caller is authorized for THIS batch.
+        }
+        batchRecalled[_batchNumber] = true;
+        emit BatchRecalled(_batchNumber, block.timestamp);
     }
 
     // ********** View Functions **********
